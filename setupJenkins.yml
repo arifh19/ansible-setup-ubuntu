@@ -1,0 +1,48 @@
+---
+  - name: Setup Server
+    hosts: jenkins
+    become: true
+
+    tasks:
+      - name: Check connection node
+        ping:
+      
+      - name: Install Docker
+        apt:
+          name: docker
+          state: present
+
+      - name: install nginx
+        apt:
+          name: nginx
+          state: present
+      
+      - name: ensure nginx started
+        service:
+          name: nginx
+          state: started
+          enabled: true
+
+      - name: Install git
+        apt:
+          name: git
+          state: present
+      
+      - name: Install Node JS Repo
+        command: "curl -sL https://deb.nodesource.com/setup_lts.x | sudo -E bash -"
+        register: nodejs
+        failed_when: nodejs.rc !=2 and nodejs.rc !=0
+
+      - name: Install NodeJS
+        apt: name=nodejs state=latest update_cache=yes
+
+      - name: Install Yarn Repo
+        command: "curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -"
+        register: yarn
+        failed_when: yarn.rc !=2 and yarn.rc !=0
+      
+      - name: Enable Yarn Repository
+        command: "echo 'deb https://dl.yarnpkg.com/debian/ stable main' | sudo tee /etc/apt/sources.list.d/yarn.list"
+        
+      - name: Install Yarn
+        apt: name=yarn state=latest update_cache=yes

@@ -1,0 +1,89 @@
+---
+  - name: 'Setup DB Server'
+    hosts: dbcenter
+    become: true
+    vars:
+      remote_file: /home/ansman/db-restaurant
+      user: ansman
+      userDb: arifh19
+
+    tasks:
+      - name: Install aptitude using apt
+        apt: name=aptitude state=latest update_cache=yes force_apt_get=yes
+
+      - name: Install required system packages
+        apt: name={{ item }} state=latest update_cache=yes
+        loop: [ 'apt-transport-https', 'ca-certificates', 'software-properties-common']
+
+      - name: Add Docker GPG apt Key
+        apt_key:
+          url: https://download.docker.com/linux/ubuntu/gpg
+          state: present
+
+      - name: Add Docker Repository
+        apt_repository:
+          repo: deb https://download.docker.com/linux/ubuntu bionic stable
+          state: present
+
+      - name: Update apt and install docker-ce
+        apt: update_cache=yes name=docker-ce state=latest
+
+      - name: Add user to group Docker
+        become: true
+        user:
+          name: ansman
+          shell: /bin/bash
+          groups: docker
+          append: yes
+      
+      - name: Install docker-compose
+        become: true
+        get_url: 
+          url : https://github.com/docker/compose/releases/download/1.27.4/docker-compose-Linux-x86_64
+          dest: /usr/local/bin/docker-compose
+          owner: "{{user}}"
+          group:  "{{user}}"
+          mode: 'u+x,g+x'
+      
+      - name: Create a directory if it does not exist
+        file:
+          path: "{{remote_file}}"
+          state: directory
+          mode: '0755'
+      
+      - name: Stop Docker Compose
+        args:
+          chdir: "{{remote_file}}"
+        command: docker-compose -f docker-compose.yml stop
+        ignore_errors: True
+
+      - name: Send docker-compose.yml to server
+        copy:
+          src: "docker-db/docker-compose.yml"
+          dest: "{{remote_file}}/docker-compose.yml"
+          owner: "{{user}}"
+          group: "{{user}}"
+          mode: "u+x,g+x"
+
+      - name: Send .env to server
+        copy:
+          src: "docker-db/.env"
+          dest: "{{remote_file}}/.env"
+          owner: "{{user}}"
+          group: "{{user}}"
+          mode: "u+x,g+x"
+
+      - name: Run Docker Compose
+        args:
+          chdir: "{{remote_file}}"
+        command: docker-compose up -d
+
+      - name: Wait for port 5432 to become open on the host, don't start checking for 3 seconds
+        wait_for:
+          port: 5432
+          delay: 3
+
+      - name: Migrate data to container
+        command: "docker exec db-restaurant_db_1 pg_restore -U {{userDb}} -d restaurant -v resto.sql --no-owner"
+        when: Data has been migrated before
+        ignore_errors: yes
