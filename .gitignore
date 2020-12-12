@@ -1,2 +1,3 @@
-docker-db/.env
+docker-db/.env.prod
+docker-db/.envstag
 hosts

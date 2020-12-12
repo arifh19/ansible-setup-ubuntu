@@ -1,0 +1,2 @@
+jenkins ansible_host=x ansible_connection=ssh
+dbcenter ansible_host=x ansible_connection=ssh

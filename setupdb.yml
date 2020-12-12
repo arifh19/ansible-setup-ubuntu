@@ -3,7 +3,8 @@
     hosts: dbcenter
     become: true
     vars:
-      remote_file: /home/ansman/db-restaurant
+      remote_file_stag: /home/ansman/db-restaurant_stag
+      remote_file_prod: /home/ansman/db-restaurant_prod
       user: ansman
       userDb: arifh19
 
@@ -45,45 +46,86 @@
           group:  "{{user}}"
           mode: 'u+x,g+x'
       
-      - name: Create a directory if it does not exist
+      - name: Create a directory staging if it does not exist
         file:
-          path: "{{remote_file}}"
+          path: "{{remote_file_stag}}"
           state: directory
           mode: '0755'
-      
-      - name: Stop Docker Compose
+     
+      - name: Create a directory production if it does not exist
+        file:
+          path: "{{remote_file_prod}}"
+          state: directory
+          mode: '0755'      
+
+      - name: Stop Docker Compose Staging
         args:
-          chdir: "{{remote_file}}"
+          chdir: "{{remote_file_stag}}"
         command: docker-compose -f docker-compose.yml stop
         ignore_errors: True
 
-      - name: Send docker-compose.yml to server
+      - name: Stop Docker Compose Production
+        args:
+          chdir: "{{remote_file_prod}}"
+        command: docker-compose -f docker-compose.yml stop
+        ignore_errors: True
+
+      - name: Send docker-compose.yml staging to server
         copy:
           src: "docker-db/docker-compose.yml"
-          dest: "{{remote_file}}/docker-compose.yml"
+          dest: "{{remote_file_stag}}/docker-compose.yml"
           owner: "{{user}}"
           group: "{{user}}"
           mode: "u+x,g+x"
 
-      - name: Send .env to server
+      - name: Send docker-compose.yml production to server
         copy:
-          src: "docker-db/.env"
-          dest: "{{remote_file}}/.env"
+          src: "docker-db/docker-compose.yml"
+          dest: "{{remote_file_prod}}/docker-compose.yml"
           owner: "{{user}}"
           group: "{{user}}"
           mode: "u+x,g+x"
 
-      - name: Run Docker Compose
+      - name: Send .env staging to server
+        copy:
+          src: "docker-db/.env.stag"
+          dest: "{{remote_file_stag}}/.env"
+          owner: "{{user}}"
+          group: "{{user}}"
+          mode: "u+x,g+x"
+
+      - name: Send .env production to server
+        copy:
+          src: "docker-db/.env.prod"
+          dest: "{{remote_file_prod}}/.env"
+          owner: "{{user}}"
+          group: "{{user}}"
+          mode: "u+x,g+x"
+
+      - name: Run Docker Compose Staging
         args:
-          chdir: "{{remote_file}}"
+          chdir: "{{remote_file_stag}}"
         command: docker-compose up -d
 
-      - name: Wait for port 5432 to become open on the host, don't start checking for 3 seconds
+      - name: Run Docker Compose Production
+        args:
+          chdir: "{{remote_file_prod}}"
+        command: docker-compose up -d
+
+      - name: Wait for port 21999 (postgre staging) to become open on the host, don't start checking for 3 seconds
         wait_for:
-          port: 5432
+          port: 21999
           delay: 3
 
-      - name: Migrate data to container
-        command: "docker exec db-restaurant_db_1 pg_restore -U {{userDb}} -d restaurant -v resto.sql --no-owner"
-        when: Data has been migrated before
-        ignore_errors: yes
+      - name: Wait for port 29999 (postgre production) to become open on the host
+        wait_for:
+          port: 29999
+
+      - name: Wait for port 21777 (redis production) to become open on the host
+        wait_for:
+          port: 21777
+
+      - name: Wait for port 27777 (redis production) to become open on the host
+        wait_for:
+          port: 27777
+
